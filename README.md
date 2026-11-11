@@ -2,6 +2,8 @@
 
 Compilateur de tickets Jira assisté par IA qui transforme les intentions brutes des Product Owners en spécifications complètes, connectées à la documentation existante, enrichies des briques logicielles réutilisables du dépôt, et directement exécutables par les développeurs ou par un agent de code (`bmad-agent-dev`).
 
+Consultez l'explorateur interactif du brainstorming (112 idées, 6 méthodes créatives et synthèse architecturale) en ligne sur [https://caroheymes.github.io/jira-spec-compiler/](https://caroheymes.github.io/jira-spec-compiler/).
+
 ## Pourquoi ce projet existe
 
 Dans la majorité des équipes produit et ingénierie, le ticket Jira souffre d'une double friction structurelle. Du côté Product Owner, rédiger un ticket exhaustif demande de fouiller dans des dizaines de pages Confluence, de deviner les cas limites et de connaître l'état actuel du code, ce qui finit souvent par un ticket d'une ligne rédigé à la hâte. Du côté développeur, ouvrir ce ticket déclenche une série d'allers-retours de clarification sur Slack, une recherche manuelle dans le dépôt Git et, trop souvent, la réécriture involontaire de composants pourtant déjà développés par une autre équipe.
@@ -39,7 +41,7 @@ Avant le passage à l'état *Ready for Dev*, le ticket subit une lecture à blan
 Le dépôt s'organise autour des spécifications produit, des schémas de contrats et des modules d'orchestration:
 
 1. [prd.md](prd.md) contient le Product Requirements Document complet du compilateur (vision, parcours utilisateurs, glossaire, exigences fonctionnelles et métriques).
-2. [brainstorm.html](brainstorm.html) présente l'explorateur visuel interactif des 112 idées et questions issues des 6 techniques de brainstorming (Lotus Blossom, Starbursting, Crazy 8s, Job to Be Done, Backcasting, Emergent Thinking).
+2. [brainstorm.html](brainstorm.html) (publié sur [https://caroheymes.github.io/jira-spec-compiler/](https://caroheymes.github.io/jira-spec-compiler/)) présente l'explorateur visuel interactif des 112 idées et questions issues des 6 techniques de brainstorming (Lotus Blossom, Starbursting, Crazy 8s, Job to Be Done, Backcasting, Emergent Thinking).
 3. `schemas/` (à venir) regroupera le format standard du manifeste de brique (`brick.toml`) et le schéma de sortie du Ticket Bifrons.
 4. `src/` (à venir) hébergera les connecteurs MCP Jira/Confluence, l'indexeur de briques Git et le simulateur de lecture BMad.
 
