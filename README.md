@@ -10,18 +10,7 @@ Dans la majorité des équipes produit et ingénierie, le ticket Jira souffre d'
 
 ## Architecture fonctionnelle en trois piliers
 
-```mermaid
-flowchart LR
-    PO["Brouillon PO dans Jira"] --> M["1. Maïeutique PO et Linter sémantique"]
-    M --> R["2. Enrichisseur RAG et Radar de briques"]
-    Doc[("Confluence et ADR")] --> R
-    Repo[("Dépôts Git et Index de briques")] --> R
-    R --> C["3. Compilateur BMad-Ready (Dry-Run Amelia)"]
-    C --> T["Ticket Bifrons validé (Vue PO + Manifeste Dev)"]
-    T --> Dev["Exécution Dev ou bmad-agent-dev"]
-    Dev --> PR["Pull Request fusionnée et mise à jour de l'index"]
-    PR --> Repo
-```
+![Architecture jira-spec-compiler](architecture.png)
 
 ### 1. Capture maïeutique et détection d'ambiguïtés pour le Product Owner
 

@@ -19,6 +19,8 @@ Le produit agit comme un compilateur situé entre l'intention produit et l'exéc
 
 À la sortie de ce pipeline, l'équipe dispose d'un Ticket Bifrons: une vue métier concise que le Product Owner pilote sans surcharge technique, et un Manifeste d'Exécution BMad complet permettant au développeur humain de démarrer en cinq minutes ou de déléguer directement la réalisation à `bmad-agent-dev`.
 
+![Architecture jira-spec-compiler](architecture.png)
+
 ## 2. Utilisateurs cibles et parcours
 
 ### 2.1 Travaux à accomplir (Jobs to be done)
