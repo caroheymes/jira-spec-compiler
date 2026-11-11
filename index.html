@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compilateur de tickets Jira et orchestration BMad : exploration exhaustive</title>
+<style>
+  :root {
+    --bg-base: #0b0f17;
+    --bg-panel: #111826;
+    --bg-card: #161f30;
+    --bg-card-hover: #1c283e;
+    --bg-accent-subtle: rgba(56, 189, 248, 0.08);
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --border-color: #26334d;
+    --border-highlight: #38bdf8;
+    --accent-cyan: #38bdf8;
+    --accent-amber: #f59e0b;
+    --accent-emerald: #10b981;
+    --accent-violet: #a855f7;
+    --accent-rose: #f43f5e;
+    --accent-blue: #3b82f6;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    background-image:
+      linear-gradient(to right, rgba(38, 51, 77, 0.22) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(38, 51, 77, 0.22) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* En-tête et navigation collante */
+  header.hero {
+    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(180deg, rgba(17, 24, 38, 0.96) 0%, rgba(11, 15, 23, 0.96) 100%);
+    padding: 2.5rem 2rem 2rem;
+  }
+
+  .container {
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  .hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .tech-badge {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-panel);
+    color: var(--accent-cyan);
+    letter-spacing: 0.02em;
+  }
+
+  .tech-badge.amber { color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.35); }
+  .tech-badge.emerald { color: var(--accent-emerald); border-color: rgba(16, 185, 129, 0.35); }
+  .tech-badge.violet { color: var(--accent-violet); border-color: rgba(168, 85, 247, 0.35); }
+
+  h1 {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    max-width: 920px;
+  }
+
+  .hero-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.02rem;
+    max-width: 880px;
+    margin-top: 0.6rem;
+  }
+
+  .telemetry-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .stat-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+  }
+
+  .stat-val {
+    font-family: var(--font-mono);
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+
+  /* Barre de contrôle globale */
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(11, 15, 23, 0.94);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 2rem;
+  }
+
+  .nav-inner {
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .nav-btn {
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  .nav-btn:hover, .nav-btn.active {
+    border-color: var(--accent-cyan);
+    color: var(--text-primary);
+    background: rgba(56, 189, 248, 0.12);
+  }
+
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1;
+    max-width: 420px;
+  }
+
+  .search-input {
+    width: 100%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.45rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+  }
+
+  .search-count {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--accent-emerald);
+    white-space: nowrap;
+  }
+
+  /* Sections principales */
+  main {
+    padding: 2rem;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  section.block {
+    margin-bottom: 3.5rem;
+    background: rgba(17, 24, 38, 0.75);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.75rem;
+  }
+
+  .section-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .section-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  .section-index {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--accent-cyan);
+    background: rgba(56, 189, 248, 0.1);
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .section-desc {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  /* Climax : Synthèse & Architecture 3 piliers */
+  .climax-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .insight-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 3px solid var(--accent-cyan);
+    border-radius: 6px;
+    padding: 1.25rem;
+  }
+
+  .insight-card.amber { border-top-color: var(--accent-amber); }
+  .insight-card.emerald { border-top-color: var(--accent-emerald); }
+  .insight-card.violet { border-top-color: var(--accent-violet); }
+
+  .insight-tag {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--accent-cyan);
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  .insight-card.amber .insight-tag { color: var(--accent-amber); }
+  .insight-card.emerald .insight-tag { color: var(--accent-emerald); }
+  .insight-card.violet .insight-tag { color: var(--accent-violet); }
+
+  .insight-card h3 {
+    font-size: 1.08rem;
+    margin-bottom: 0.6rem;
+    color: var(--text-primary);
+  }
+
+  .insight-card p {
+    font-size: 0.92rem;
+    color: var(--text-secondary);
+  }
+
+  /* Simulateur interactif Ticket Bifrons */
+  .bifrons-demo {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-top: 1.25rem;
+  }
+
+  .bifrons-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .bifrons-tabs {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .tab-btn {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.45rem 0.9rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.84rem;
+    font-family: var(--font-mono);
+  }
+
+  .tab-btn.active {
+    background: rgba(56, 189, 248, 0.16);
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+  }
+
+  .bifrons-view {
+    display: none;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .bifrons-view.active {
+    display: grid;
+  }
+
+  @media (max-width: 900px) {
+    .bifrons-view.active {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .code-pane {
+    background: #090d14;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    overflow-x: auto;
+  }
+
+  .code-pane h4 {
+    color: var(--accent-amber);
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .svg-diagram-box {
+    margin: 1.25rem 0;
+    padding: 1rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+
+  /* 1. Lotus Blossom */
+  .lotus-layout {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 1080px) {
+    .lotus-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .lotus-matrix-3x3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    background: var(--bg-panel);
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+  }
+
+  .lotus-cell {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 0.7rem 0.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 92px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .lotus-cell:hover, .lotus-cell.active {
+    border-color: var(--accent-cyan);
+    background: rgba(56, 189, 248, 0.14);
+  }
+
+  .lotus-cell.center-core {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: var(--accent-amber);
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+
+  .lotus-cell-num {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--accent-cyan);
+  }
+
+  .lotus-cell-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .lotus-petals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 1rem;
+  }
+
+  .petal-group-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1.1rem;
+  }
+
+  .petal-root {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .petal-id {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--accent-amber);
+  }
+
+  .petal-root h3 {
+    font-size: 1rem;
+    margin: 0.2rem 0 0.35rem;
+    color: var(--text-primary);
+  }
+
+  .petal-root p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+  }
+
+  .sub-petal-item {
+    background: var(--bg-panel);
+    border-left: 2px solid var(--accent-cyan);
+    padding: 0.6rem 0.75rem;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 0.55rem;
+  }
+
+  .sub-petal-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .sub-petal-head {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--accent-cyan);
+    margin-bottom: 0.2rem;
+  }
+
+  .sub-petal-item p {
+    font-size: 0.86rem;
+    color: var(--text-secondary);
+  }
+
+  /* 2. Starbursting */
+  .star-top-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  @media (max-width: 1024px) {
+    .star-top-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .star-axes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1rem;
+  }
+
+  .star-axis-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1.1rem;
+  }
+
+  .star-axis-title {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-amber);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .question-box {
+    background: var(--bg-panel);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    border-radius: 4px;
+    padding: 0.7rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+  }
+
+  .question-box:last-child {
+    margin-bottom: 0;
+  }
+
+  .q-code {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--accent-cyan);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  /* 3. Crazy 8s (2x8 Blueprint Grid) */
+  .crazy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.9rem;
+  }
+
+  .crazy-cell {
+    background:
+      linear-gradient(rgba(30, 58, 138, 0.14) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 58, 138, 0.14) 1px, transparent 1px),
+      var(--bg-card);
+    background-size: 16px 16px;
+    border: 1px solid #2e4369;
+    border-radius: 5px;
+    padding: 1rem;
+    position: relative;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+
+  .crazy-cell:hover {
+    border-color: var(--accent-cyan);
+    transform: translateY(-2px);
+  }
+
+  .crazy-num {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--accent-cyan);
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 0.12rem 0.45rem;
+    border-radius: 3px;
+    display: inline-block;
+    margin-bottom: 0.45rem;
+  }
+
+  .crazy-cell h3 {
+    font-size: 0.98rem;
+    color: var(--text-primary);
+    margin-bottom: 0.45rem;
+  }
+
+  .crazy-cell p {
+    font-size: 0.87rem;
+    color: var(--text-secondary);
+  }
+
+  /* 4. Job to Be Done */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .filter-pill {
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.85rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+  }
+
+  .filter-pill.active {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-emerald);
+    border-color: var(--accent-emerald);
+  }
+
+  .jtbd-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1rem;
+  }
+
+  .jtbd-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .jtbd-role {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+    width: fit-content;
+  }
+
+  .role-po { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.35); }
+  .role-dev { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.35); }
+  .role-pm { background: rgba(168, 85, 247, 0.15); color: var(--accent-violet); border: 1px solid rgba(168, 85, 247, 0.35); }
+  .role-qa { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.35); }
+
+  .jtbd-quote {
+    font-size: 0.96rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.65rem;
+    padding-left: 0.65rem;
+    border-left: 2px solid var(--accent-amber);
+  }
+
+  .jtbd-solution {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    background: var(--bg-panel);
+    padding: 0.7rem;
+    border-radius: 4px;
+  }
+
+  /* 5. Backcasting (Reverse Timeline) */
+  .timeline-container {
+    position: relative;
+    padding-left: 1.75rem;
+    border-left: 2px solid var(--accent-cyan);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .timeline-node {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    position: relative;
+  }
+
+  .timeline-node::before {
+    content: "";
+    position: absolute;
+    left: -2.22rem;
+    top: 1.2rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    border: 2px solid var(--bg-base);
+  }
+
+  .timeline-node.guardrail {
+    border-left: 3px solid var(--accent-amber);
+  }
+
+  .timeline-node.guardrail::before {
+    background: var(--accent-amber);
+  }
+
+  .horizon-badge {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--accent-cyan);
+    margin-bottom: 0.25rem;
+    display: inline-block;
+  }
+
+  .timeline-node.guardrail .horizon-badge {
+    color: var(--accent-amber);
+  }
+
+  .timeline-node h3 {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.35rem;
+  }
+
+  .timeline-node p {
+    font-size: 0.89rem;
+    color: var(--text-secondary);
+  }
+
+  /* 6. Emergent Thinking */
+  .emergent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 1rem;
+  }
+
+  .motif-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 2px solid var(--accent-violet);
+    border-radius: 6px;
+    padding: 1.1rem;
+  }
+
+  .motif-id {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--accent-violet);
+    margin-bottom: 0.3rem;
+    display: block;
+  }
+
+  .motif-card h3 {
+    font-size: 0.98rem;
+    color: var(--text-primary);
+    margin-bottom: 0.45rem;
+  }
+
+  .motif-card p {
+    font-size: 0.87rem;
+    color: var(--text-secondary);
+  }
+
+  .hidden-by-filter {
+    display: none !important;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <div class="hero-top">
+      <div>
+        <div class="badge-row">
+          <span class="tech-badge">SESSION AUTONOME: 2026-11-11</span>
+          <span class="tech-badge amber">COMPILATEUR JIRA VERS BMAD</span>
+          <span class="tech-badge emerald">PATRIMOINE DE BRIQUES LOGICIELS</span>
+          <span class="tech-badge violet">ORCHESTRATION BMAD-AGENT-DEV (AMELIA)</span>
+        </div>
+        <h1>Automatiser l'optimisation du contenu des tickets Jira et leur complétion</h1>
+        <p class="hero-subtitle">
+          Permettre aux Product Owners de rédiger d'excellents tickets complets avec toute la documentation pertinente, favoriser la réutilisation de briques existantes par les développeurs et préparer l'exécution directe par bmad-agent-dev.
+        </p>
+      </div>
+    </div>
+
+    <div class="telemetry-strip">
+      <div class="stat-box">
+        <div class="stat-val">112</div>
+        <div class="stat-label">Idées et questions d'ingénierie</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">6</div>
+        <div class="stat-label">Matrices méthodologiques</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">4</div>
+        <div class="stat-label">Piliers de synthèse et d'architecture</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">28 + 18 + 16</div>
+        <div class="stat-label">Lotus (28), Starburst (18), Crazy 8s (16)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">18 + 16 + 16</div>
+        <div class="stat-label">JTBD (18), Backcast (16), Émergent (16)</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="sticky-nav">
+  <div class="nav-inner">
+    <div class="nav-links">
+      <a href="#sec-climax" class="nav-btn active">Synthèse et architecture (4)</a>
+      <a href="#sec-lotus" class="nav-btn">01. Lotus blossom (28)</a>
+      <a href="#sec-starburst" class="nav-btn">02. Starbursting (18)</a>
+      <a href="#sec-crazy8" class="nav-btn">03. Crazy 8s (16)</a>
+      <a href="#sec-jtbd" class="nav-btn">04. Job to be done (18)</a>
+      <a href="#sec-backcast" class="nav-btn">05. Backcasting (16)</a>
+      <a href="#sec-emergent" class="nav-btn">06. Emergent thinking (16)</a>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="globalSearch" class="search-input" placeholder="Filtrer les 116 entrées (ex: Amelia, Confluence, brique, Gherkin)...">
+      <span id="searchCount" class="search-count">116 / 116 visibles</span>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <!-- SECTION CLIMAX : SYNTHÈSE ET ARCHITECTURE EN 3 PILIERS -->
+  <section id="sec-climax" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">SYNTHÈSE</span>
+        <h2>Architecture cible et résolutions de conception</h2>
+      </div>
+      <span class="section-desc">4 enseignements directeurs issus de la convergence des 6 ateliers</span>
+    </div>
+
+    <div class="climax-grid">
+      <article class="insight-card searchable-item">
+        <span class="insight-tag">ENSEIGNEMENT 01 / LE TICKET BIFRONS</span>
+        <h3>Résolution de la tension cognitive entre PO et agent de code</h3>
+        <p>La tension entre charge cognitive du PO et précision technique exigée par bmad-agent-dev se résout par le "Ticket Bifrons" (Double Visage): le PO ne valide que l'intention métier et 3 questions d'arbitrage, tandis que le système compile en coulisse le manifeste technique (docs Confluence ciblées, briques à réutiliser, fichiers Git et commande BMad).</p>
+      </article>
+
+      <article class="insight-card amber searchable-item">
+        <span class="insight-tag">ENSEIGNEMENT 02 / LE RADAR DE BRIQUES EN AMONT</span>
+        <h3>Inversion du cycle de découverte du patrimoine logiciel</h3>
+        <p>La réutilisation des briques existantes échoue si elle arrive trop tard (quand le dev code déjà). En injectant le "Radar de Briques" et le "Devis de Réutilisation" dès la rédaction par le PO, le périmètre fonctionnel s'adapte à l'existant avant même que le ticket ne soit figé.</p>
+      </article>
+
+      <article class="insight-card emerald searchable-item">
+        <span class="insight-tag">ENSEIGNEMENT 03 / DRY-RUN AMELIA</span>
+        <h3>Simulateur de lecture bmad-agent-dev dès le raffinement</h3>
+        <p>Utiliser le persona bmad-agent-dev (Amelia) dès le raffinement Jira comme "lecteur-simulateur" (Dry-Run Amelia) crée un pont naturel vers l'objectif à terme: le jour où un ticket obtient 90/100 au test de compréhension d'Amelia, les développeurs peuvent littéralement lancer bmad-agent-dev dessus pour coder la story.</p>
+      </article>
+
+      <article class="insight-card violet searchable-item">
+        <span class="insight-tag">DIRECTION ARCHITECTURALE / LES 3 PILIERS</span>
+        <h3>Orchestrateur modulaire de compilation Jira vers BMad</h3>
+        <p>Architecture recommandée en 3 piliers: (1) Assistant Maïeutique PO + Radar de Briques en amont, (2) Enrichisseur RAG (Confluence + ADR + Index de Briques auto-maintenu par PR), (3) Compilateur "BMad-Ready" générant le contexte d'exécution pour les développeurs et bmad-agent-dev.</p>
+      </article>
+    </div>
+
+    <!-- Schéma d'architecture SVG à fond transparent -->
+    <div class="svg-diagram-box">
+      <svg viewBox="0 0 1100 220" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" style="background: transparent;">
+        <defs>
+          <marker id="arrowCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+          </marker>
+          <marker id="arrowEmerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981"/>
+          </marker>
+        </defs>
+        <!-- Pilier 1 -->
+        <rect x="15" y="25" width="310" height="165" rx="8" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="35" y="55" fill="#f59e0b" font-family="monospace" font-size="12" font-weight="bold">PILIER 1: AMONT PRODUIT (PO)</text>
+        <text x="35" y="82" fill="#f1f5f9" font-family="sans-serif" font-size="14" font-weight="bold">Assistant maïeutique et radar</text>
+        <text x="35" y="108" fill="#cbd5e1" font-family="sans-serif" font-size="12">3 questions socratiques ciblées</text>
+        <text x="35" y="130" fill="#cbd5e1" font-family="sans-serif" font-size="12">Devis de réutilisation en temps réel</text>
+        <text x="35" y="152" fill="#cbd5e1" font-family="sans-serif" font-size="12">Contrat métier immuable (10 lignes)</text>
+
+        <!-- Flèche 1 -> 2 -->
+        <line x1="325" y1="108" x2="385" y2="108" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowCyan)"/>
+
+        <!-- Pilier 2 -->
+        <rect x="395" y="25" width="310" height="165" rx="8" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+        <text x="415" y="55" fill="#38bdf8" font-family="monospace" font-size="12" font-weight="bold">PILIER 2: MOTEUR RAG HYBRIDE</text>
+        <text x="415" y="82" fill="#f1f5f9" font-family="sans-serif" font-size="14" font-weight="bold">Ancrage documentaire et briques</text>
+        <text x="415" y="108" fill="#cbd5e1" font-family="sans-serif" font-size="12">Extraits Confluence ancrés + ADR</text>
+        <text x="415" y="130" fill="#cbd5e1" font-family="sans-serif" font-size="12">Catalogue vivant brick.toml via PR</text>
+        <text x="415" y="152" fill="#cbd5e1" font-family="sans-serif" font-size="12">Détection d'écarts doc vs branche main</text>
+
+        <!-- Flèche 2 -> 3 -->
+        <line x1="705" y1="108" x2="765" y2="108" stroke="#10b981" stroke-width="2" marker-end="url(#arrowEmerald)"/>
+
+        <!-- Pilier 3 -->
+        <rect x="775" y="25" width="310" height="165" rx="8" fill="none" stroke="#10b981" stroke-width="1.5"/>
+        <text x="795" y="55" fill="#10b981" font-family="monospace" font-size="12" font-weight="bold">PILIER 3: COMPILATEUR BMAD-READY</text>
+        <text x="795" y="82" fill="#f1f5f9" font-family="sans-serif" font-size="14" font-weight="bold">Qualification Dry-Run Amelia</text>
+        <text x="795" y="108" fill="#cbd5e1" font-family="sans-serif" font-size="12">Audit à blanc Amelia (Score /100)</text>
+        <text x="795" y="130" fill="#cbd5e1" font-family="sans-serif" font-size="12">Manifeste Git + payloads JSON TDD</text>
+        <text x="795" y="152" fill="#cbd5e1" font-family="sans-serif" font-size="12">Génération de story-context.md</text>
+      </svg>
+    </div>
+
+    <!-- Simulateur interactif du Ticket Bifrons -->
+    <div class="bifrons-demo">
+      <div class="bifrons-header">
+        <div>
+          <strong>Simulateur interactif: inspection d'un Ticket Bifrons (Double Visage)</strong>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">Basculez entre la projection métier épurée du Product Owner et le graphe d'exécution compilé pour le développeur et bmad-agent-dev.</div>
+        </div>
+        <div class="bifrons-tabs">
+          <button class="tab-btn active" onclick="switchBifrons('po', this)">1. Face Product Owner (Contrat métier)</button>
+          <button class="tab-btn" onclick="switchBifrons('dev', this)">2. Face Dev et bmad-agent-dev (Manifeste compilé)</button>
+        </div>
+      </div>
+
+      <div id="bifrons-po" class="bifrons-view active">
+        <div class="code-pane">
+          <h4>INTENTION MÉTIER (10 LIGNES, ZÉRO BRUIT TECHNIQUE)</h4>
+          <p>Le ticket JIRA-4821 porte sur l'export comptable mensuel des factures clients VIP avec ventilation TVA. Il permet au contrôle de gestion de clôturer le mois en 5 minutes au lieu de 3 heures.</p>
+          <p style="margin-top:0.5rem;">Les trois arbitrages maïeutiques sont validés par le PO: règle d'arrondi bancaire au centime le plus proche; rejet explicite si une facture est en statut brouillon; format CSV UTF-8 avec séparateur point-virgule.</p>
+        </div>
+        <div class="code-pane">
+          <h4>DEVIS DE RÉUTILISATION ET RADAR DE BRIQUES</h4>
+          <p>Une création de zéro exigerait 5 points d'effort (développement d'un moteur CSV et d'un agrégateur fiscal dédié).</p>
+          <p style="margin-top:0.4rem; color: var(--accent-emerald);">Le PO retient la variante à 1 point d'effort qui réutilise à 85 % les briques internes <code>ExportService</code> et <code>TaxRoundingUtil</code>.</p>
+          <p style="margin-top:0.4rem;">La section 4.2 de Confluence ("Règles d'arrondi TVA intracommunautaire") est épinglée automatiquement en référence.</p>
+        </div>
+      </div>
+
+      <div id="bifrons-dev" class="bifrons-view">
+        <div class="code-pane">
+          <h4>MANIFESTE D'EXÉCUTION COMPILÉ (STORY-CONTEXT.MD)</h4>
+          <p>L'audit Dry-Run Amelia attribue un score BMad-Ready de 96 / 100 sans aucune question bloquante restante. Le glossaire dynamique traduit "Client VIP" par la condition <code>user.tier === 'PLATINUM' && contract.active</code>.</p>
+          <p style="margin-top:0.5rem;">La brique recommandée <code>@internal/export-service (v2.4)</code> affiche 94 % de couverture de tests (utilisée avec succès dans JIRA-4102 et JIRA-4319). Les fichiers cibles identifiés sont <code>src/billing/vip-export.service.ts</code> et <code>tests/billing/vip-export.spec.ts</code>.</p>
+        </div>
+        <div class="code-pane">
+          <h4>CONTRAT DE VÉRIFICATION AUTOMATISÉE ET INVOCATION</h4>
+          <p>Les conventions d'idempotence et de typage strict issues de <code>AGENTS.md</code> sont injectées dans le contexte. La preuve TDD s'exécute via <code>vitest run tests/billing/vip-export.spec.ts</code>.</p>
+          <p style="margin-top:0.5rem; color: var(--accent-cyan);">Commande d'invocation directe prête à copier:<br><code>bmad-agent-dev --ticket JIRA-4821 --context .bmad/stories/JIRA-4821-context.md</code></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 1 : LOTUS BLOSSOM (28 IDÉES) -->
+  <section id="sec-lotus" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">01 / LOTUS BLOSSOM</span>
+        <h2>Matrice florale d'expansion fonctionnelle (28 idées)</h2>
+      </div>
+      <span class="section-desc">Cliquez sur un pétale de la grille 3x3 pour filtrer ses sous-composants ou afficher l'ensemble</span>
+    </div>
+
+    <div class="lotus-layout">
+      <div>
+        <div class="lotus-matrix-3x3" id="lotusSelector">
+          <div class="lotus-cell" onclick="filterLotus('P1', this)">
+            <span class="lotus-cell-num">PÉTALE 1 (4)</span>
+            <span class="lotus-cell-title">Capture d'intention PO</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P2', this)">
+            <span class="lotus-cell-num">PÉTALE 2 (4)</span>
+            <span class="lotus-cell-title">Ancrage documentaire</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P3', this)">
+            <span class="lotus-cell-num">PÉTALE 3 (4)</span>
+            <span class="lotus-cell-title">Radar de briques</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P8', this)">
+            <span class="lotus-cell-num">PÉTALE 8 (1)</span>
+            <span class="lotus-cell-title">Gouvernance Chef de Projet IA</span>
+          </div>
+          <div class="lotus-cell center-core active" onclick="filterLotus('ALL', this)">
+            <span class="lotus-cell-num" style="color: var(--accent-amber);">CŒUR CENTRAL (28)</span>
+            <span class="lotus-cell-title">Tout afficher (8 pétales)</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P4', this)">
+            <span class="lotus-cell-num">PÉTALE 4 (4)</span>
+            <span class="lotus-cell-title">Spécification par cas limites</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P7', this)">
+            <span class="lotus-cell-num">PÉTALE 7 (3)</span>
+            <span class="lotus-cell-title">Boucle d'apprentissage</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P6', this)">
+            <span class="lotus-cell-num">PÉTALE 6 (4)</span>
+            <span class="lotus-cell-title">Passerelle bmad-agent-dev</span>
+          </div>
+          <div class="lotus-cell" onclick="filterLotus('P5', this)">
+            <span class="lotus-cell-num">PÉTALE 5 (4)</span>
+            <span class="lotus-cell-title">Qualification Agent-Ready</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="lotus-petals-grid" id="lotusContainer">
+        <!-- Pétale 1 -->
+        <div class="petal-group-card lotus-group" data-petal="P1">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 1</span>
+            <h3>Capture d'intention PO</h3>
+            <p>Assistant socratique intégré à Jira qui pose 3 questions ciblées au PO dès la création du brouillon pour lever les implicites métier.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P1.1: CAPTURE VOCALE</div>
+            <p>Dictée vocale brute du PO en sortie de réunion client convertie en ticket structuré avec séparation problème, valeur métier et périmètre.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P1.2: DÉTECTEUR DE MOTS-VALISES</div>
+            <p>Linter sémantique qui surligne les termes flous ('rapide', 'simple', 'comme avant', 'optimiser') et exige une métrique ou un comportement observable.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P1.3: EXTRACTION DE RÈGLES MÉTIER</div>
+            <p>Analyseur des discussions Slack/Teams liées au sujet pour pré-remplir les décisions déjà actées à l'oral.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 2 -->
+        <div class="petal-group-card lotus-group" data-petal="P2">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 2</span>
+            <h3>Ancrage documentaire automatique</h3>
+            <p>Moteur RAG fédérant Confluence, ADR, schémas OpenAPI et README Git pour attacher au ticket uniquement les extraits pertinents.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P2.1: FILTRAGE ANTI-BRUIT DOCUMENTAIRE</div>
+            <p>Résumé contextuel qui extrait la section exacte d'une page Confluence (avec lien ancré) au lieu de coller 5 liens génériques que personne ne lit.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P2.2: DÉTECTION DE DOC OBSOLÈTE</div>
+            <p>Alerte automatique dans le ticket lorsque la documentation métier citée contredit le code actuel de la branche principale.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P2.3: LIAISON VISUELLE FIGMA/MAQUETTES</div>
+            <p>Extraction automatique des composants UI et états d'écran (vide, erreur, chargement) depuis le lien Figma collé par le PO.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 3 -->
+        <div class="petal-group-card lotus-group" data-petal="P3">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 3</span>
+            <h3>Radar de briques réutilisables</h3>
+            <p>Indexation sémantique continue du patrimoine applicatif (librairies internes, hooks, microservices, connecteurs) interrogée à chaque nouveau ticket.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P3.1: SCORE D'ADHÉRENCE DE RÉUTILISATION</div>
+            <p>Encart 'Briques candidates' dans Jira affichant le pourcentage de couverture fonctionnelle par des modules existants (ex. service de notification déjà codé à 85 %).</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P3.2: DÉTECTEUR DE DOUBLONS INTER-ÉQUIPES</div>
+            <p>Alerte préventive signalant qu'une autre squad a développé ou spécifié une fonctionnalité analogue au cours des 6 derniers mois.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P3.3: SNIPPET D'INTÉGRATION PRÊT À L'EMPLOI</div>
+            <p>Génération dans le ticket d'un exemple d'appel ou d'import de la brique interne recommandée avec ses propriétaires techniques.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 4 -->
+        <div class="petal-group-card lotus-group" data-petal="P4">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 4</span>
+            <h3>Spécification par les cas limites</h3>
+            <p>Générateur automatique de critères d'acceptation Gherkin (Given/When/Then) couvrant les cas nominaux, dégradés et d'erreur.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P4.1: MATRICE DE COMBINATOIRE MÉTIER</div>
+            <p>Identification automatique des croisements de profils utilisateurs, de droits RBAC et d'états de données oubliés par le PO.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P4.2: JEUX DE DONNÉES DE TEST ATTACHÉS</div>
+            <p>Génération de payloads JSON d'entrée et de sortie attendus directement annexés au ticket pour le TDD.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P4.3: CONTRAINTES NON-FONCTIONNELLES EXPLICITES</div>
+            <p>Ajout contextuel des seuils SLA, RGPD, volumétrie et idempotence selon la criticité du module touché.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 5 -->
+        <div class="petal-group-card lotus-group" data-petal="P5">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 5</span>
+            <h3>Qualification Agent-Ready</h3>
+            <p>Score de maturité 'BMad-Ready' sur 100 conditionnant le passage du ticket à l'état Ready for Dev.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P5.1: SIMULATION DE LECTURE PAR AMELIA</div>
+            <p>Exécution à blanc où bmad-agent-dev lit le ticket et liste tout ce qu'il devrait deviner s'il commençait à coder immédiatement.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P5.2: DÉCOMPOSITION AUTOMATIQUE DE TAILLE</div>
+            <p>Découpage assisté des tickets trop larges en sous-stories atomiques calibrées pour une session unique de bmad-agent-dev.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P5.3: VÉRIFICATEUR DE DÉPENDANCES BLOQUANTES</div>
+            <p>Identification des prérequis API, migrations de base de données ou clés d'environnement manquantes avant le sprint planning.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 6 -->
+        <div class="petal-group-card lotus-group" data-petal="P6">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 6</span>
+            <h3>Passerelle d'exécution bmad-agent-dev</h3>
+            <p>Compilation du ticket Jira validé en un dossier de contexte local prêt pour l'invocation de la compétence bmad-agent-dev.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P6.1: MANIFESTE DE FICHIERS CIBLES</div>
+            <p>Pré-identification par analyse statique des fichiers du dépôt Git à modifier ou à étendre, injectée dans le volet technique du ticket.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P6.2: CONTRAT DE VÉRIFICATION AUTOMATISÉE</div>
+            <p>Génération de la commande exacte de test (pytest, vitest, playwright) qui prouvera la complétion du ticket par l'agent.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P6.3: BOUTON 'GÉNÉRER LA COMMANDE BMAD'</div>
+            <p>Champ personnalisé Jira contenant la commande prête à copier pour lancer bmad-agent-dev avec l'identifiant du ticket.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 7 -->
+        <div class="petal-group-card lotus-group" data-petal="P7">
+          <div class="petal-root searchable-item">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 7</span>
+            <h3>Boucle d'apprentissage continue</h3>
+            <p>Rétroaction automatique de la Pull Request fusionnée vers l'index de briques et le modèle de rédaction des tickets.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P7.1: AUTO-CATALOGAGE DES NOUVELLES BRIQUES</div>
+            <p>Lorsqu'un dev crée un composant générique en réalisant un ticket, l'agent extrait sa fiche signalétique pour les prochains tickets PO.</p>
+          </div>
+          <div class="sub-petal-item searchable-item">
+            <div class="sub-petal-head">LOTUS P7.2: ANALYSE DES FRICTIONS DE SPRINT</div>
+            <p>Corrélation entre les questions posées en commentaire Jira pendant le sprint et les lacunes initiales du modèle de ticket.</p>
+          </div>
+        </div>
+
+        <!-- Pétale 8 -->
+        <div class="petal-group-card lotus-group" data-petal="P8">
+          <div class="petal-root searchable-item" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">
+            <span class="petal-id">LOTUS CŒUR -> PÉTALE 8</span>
+            <h3>Gouvernance Chef de Projet IA</h3>
+            <p>Tableau de bord de télémétrie mesurant le taux de complétude initiale, le taux de réutilisation de briques et le temps économisé en grooming.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2 : STARBURSTING (18 QUESTIONS) -->
+  <section id="sec-starburst" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">02 / STARBURSTING</span>
+        <h2>Boussole interrogative à 6 axes (18 questions critiques)</h2>
+      </div>
+      <span class="section-desc">Exploration systématique des zones de friction organisationnelles, techniques et légales</span>
+    </div>
+
+    <div class="star-top-layout">
+      <div style="text-align: center;">
+        <svg viewBox="0 0 300 300" width="280" height="280" xmlns="http://www.w3.org/2000/svg" style="background: transparent;">
+          <circle cx="150" cy="150" r="110" fill="none" stroke="#26334d" stroke-dasharray="4 4"/>
+          <circle cx="150" cy="150" r="65" fill="none" stroke="#26334d"/>
+          <!-- 6 axes -->
+          <line x1="150" y1="20" x2="150" y2="280" stroke="#38bdf8" stroke-width="1.5"/>
+          <line x1="37" y1="85" x2="263" y2="215" stroke="#f59e0b" stroke-width="1.5"/>
+          <line x1="263" y1="85" x2="37" y2="215" stroke="#10b981" stroke-width="1.5"/>
+          <circle cx="150" cy="150" r="28" fill="#111826" stroke="#38bdf8" stroke-width="2"/>
+          <text x="150" y="154" text-anchor="middle" fill="#f1f5f9" font-family="monospace" font-size="11" font-weight="bold">18 Q</text>
+          <text x="150" y="14" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="11" font-weight="bold">QUI (3)</text>
+          <text x="275" y="82" text-anchor="middle" fill="#10b981" font-family="monospace" font-size="11" font-weight="bold">QUOI (3)</text>
+          <text x="275" y="228" text-anchor="middle" fill="#f59e0b" font-family="monospace" font-size="11" font-weight="bold">OÙ (3)</text>
+          <text x="150" y="295" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="11" font-weight="bold">QUAND (3)</text>
+          <text x="30" y="228" text-anchor="middle" fill="#10b981" font-family="monospace" font-size="11" font-weight="bold">POURQUOI</text>
+          <text x="30" y="82" text-anchor="middle" fill="#f59e0b" font-family="monospace" font-size="11" font-weight="bold">COMMENT</text>
+        </svg>
+      </div>
+
+      <div class="star-axes-grid">
+        <!-- QUI -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 01: QUI</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUI #1</span>
+            Qui tranche lorsqu'une brique existante couvre 80 % du besoin PO mais impose un compromis mineur sur l'interface ou la règle métier?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUI #2</span>
+            Qui maintient la véracité du catalogue de briques réutilisables si les développeurs modifient le code sans mettre à jour Confluence?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUI #3</span>
+            Qui est responsable légalement et opérationnellement d'une régression introduite parce que bmad-agent-dev a suivi une documentation Confluence obsolète injectée automatiquement?
+          </div>
+        </div>
+
+        <!-- QUOI -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 02: QUOI</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUOI #1</span>
+            Qu'est-ce qui distingue concrètement un ticket 'suffisant pour un développeur humain' d'un ticket 'exécutable sans hallucination par bmad-agent-dev'?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUOI #2</span>
+            Quelle est la granularité exacte d'une 'brique réutilisable': un composant UI, un endpoint d'API, une classe utilitaire, un pattern d'architecture ou un workflow complet?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUOI #3</span>
+            Quelles informations techniques doivent rester invisibles pour le PO afin de ne pas alourdir sa charge cognitive, tout en étant présentes dans le ticket pour le dev et l'agent?
+          </div>
+        </div>
+
+        <!-- OÙ -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 03: OÙ</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / OÙ #1</span>
+            Où vit la vérité du ticket enrichi: dans le corps natif Jira, dans un panneau latéral Forge/Connect, ou dans un fichier Markdown synchronisé dans le dépôt Git?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / OÙ #2</span>
+            Où l'agent puise-t-il le contexte d'architecture si le projet s'étend sur plusieurs dépôts Git (monorepo vs polyrepo microservices)?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / OÙ #3</span>
+            Où s'arrête l'autonomie du PO dans la validation des suggestions techniques de réutilisation proposées par l'IA?
+          </div>
+        </div>
+
+        <!-- QUAND -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 04: QUAND</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUAND #1</span>
+            À quel moment précis du cycle de vie l'enrichissement doit-il se déclencher: en temps réel à la frappe, au passage en statut 'To Refine', ou en batch nocturne sur le backlog?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUAND #2</span>
+            Quand faut-il réévaluer un ticket déjà optimisé qui dort dans le backlog depuis 3 sprints alors que le code source et les briques ont évolué entre-temps?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / QUAND #3</span>
+            À quel seuil de maturité de l'équipe bascule-t-on d'un usage 'dev assisté par le ticket enrichi' à un usage 'exécution directe par bmad-agent-dev'?
+          </div>
+        </div>
+
+        <!-- POURQUOI -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 05: POURQUOI</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / POURQUOI #1</span>
+            Pourquoi les PO écrivent-ils aujourd'hui des tickets incomplets: manque de temps, méconnaissance de l'existant technique, ou peur de figer trop tôt une solution?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / POURQUOI #2</span>
+            Pourquoi les développeurs préfèrent-ils souvent recoder une brique plutôt que de réutiliser celle d'une autre équipe (coût de découverte, manque de confiance, couplage)?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / POURQUOI #3</span>
+            Pourquoi optimiser le ticket Jira lui-même plutôt que de générer directement une spécification BMad dans Git et d'utiliser Jira uniquement comme pointeur de suivi?
+          </div>
+        </div>
+
+        <!-- COMMENT -->
+        <div class="star-axis-card">
+          <div class="star-axis-title"><span>AXE 06: COMMENT</span><span>3 QUESTIONS</span></div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / COMMENT #1</span>
+            Comment éviter que l'automatisation ne transforme des tickets d'une ligne trop vagues en romans de 3 pages générés par IA que ni le PO ni le dev ne liront vraiment?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / COMMENT #2</span>
+            Comment mesurer objectivement qu'une brique suggérée par l'outil a réellement été réutilisée dans le commit final du développeur?
+          </div>
+          <div class="question-box searchable-item">
+            <span class="q-code">STARBURSTING / COMMENT #3</span>
+            Comment injecter les conventions du dépôt (<code>AGENTS.md</code> / <code>bmad-project-context</code>) dès la rédaction du ticket Jira pour aligner PO, Dev et agent BMad?
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 : CRAZY 8S (16 IDÉES) -->
+  <section id="sec-crazy8" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">03 / CRAZY 8S (DOUBLE SÉRIE 2X8)</span>
+        <h2>Planche à dessin de mécanismes radicaux (16 esquisses)</h2>
+      </div>
+      <span class="section-desc">16 concepts d'interfaces et d'automatismes d'ingénierie prêts au prototypage</span>
+    </div>
+
+    <div class="crazy-grid">
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 01 / DOUBLE LECTURE</span>
+        <h3>Le ticket accordéon bi-face</h3>
+        <p>Vue courte ultra-lisible de 10 lignes pour le PO, et panneau technique dépliable auto-généré (fichiers, briques, contrats API, prompt BMad) pour le dev.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 02 / DÉTECTION TEMPS RÉEL</span>
+        <h3>Le Shazam des briques internes</h3>
+        <p>Dès que le PO tape une phrase d'intention, une pastille affiche en direct: 'Cette fonctionnalité existe déjà à 90 % dans le module Auth-V2'.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 03 / TEST D'AMBIGUÏTÉ</span>
+        <h3>Le Chaos Monkey du grooming</h3>
+        <p>Un agent contradicteur attaque le ticket avec les 3 pires interprétations possibles; le PO clique simplement sur la bonne pour verrouiller la spec.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 04 / FRAÎCHEUR GIT</span>
+        <h3>Le ticket auto-périmable</h3>
+        <p>Chaque ticket optimisé possède un hash du commit <code>main</code> utilisé lors de son analyse; si les briques liées changent avant le sprint, le ticket passe en 'À rafraîchir'.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 05 / MULTIMODALITÉ</span>
+        <h3>La capture écran-vers-ticket</h3>
+        <p>Le PO entoure une zone de l'application en production et parle 20 secondes; l'IA retrouve le composant React/Vue exact, sa doc et rédige le ticket de modification.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 06 / FRUGALITÉ PRODUIT</span>
+        <h3>Le devis de réutilisation</h3>
+        <p>Le ticket affiche deux chiffrages côte à côte: '5 points si codé de zéro / 1 point si vous réutilisez la brique <code>ExportService</code> avec adaptation mineure'.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 07 / WEBHOOK GIT</span>
+        <h3>Le compilateur Jira-to-BMad</h3>
+        <p>Un webhook Jira qui, au passage en 'In Progress', crée automatiquement une branche Git contenant le fichier <code>story-context.md</code> prêt pour <code>bmad-agent-dev</code>.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 08 / MICRO-ARBITRAGE</span>
+        <h3>Le Tinder de la complétion</h3>
+        <p>Au lieu de rédiger, le PO répond par Oui / Non / Hors-sujet à 5 cartes de règles métier et cas limites générées par l'IA en moins de 60 secondes.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 09 / MÉMOIRE DÉFAUTS</span>
+        <h3>L'autopsie des bugs passés</h3>
+        <p>L'agent fouille les 50 derniers tickets de bugs clos sur le même composant et injecte un encart 'Pièges historiques à ne pas reproduire' dans le nouveau ticket.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 10 / AUDIT PERSONA</span>
+        <h3>Le jumeau d'Amelia en réflexion</h3>
+        <p>Un commentaire posté automatiquement par le persona <code>bmad-agent-dev</code> (Amelia) sous le ticket: 'Je suis prête à coder cette story, mais il me manque la règle d'arrondi TVA'.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 11 / INCITATION ÉQUIPE</span>
+        <h3>Le badge d'or du réutilisateur</h3>
+        <p>Gamification d'équipe: tableau de bord valorisant les PO qui conçoivent leurs parcours autour des briques existantes et les devs qui factorisent.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 12 / PONT LEXICAL</span>
+        <h3>Le traducteur jargon métier vers code</h3>
+        <p>Glossaire bidirectionnel dynamique qui traduit automatiquement 'Client VIP' (terme PO) en <code>user.tier == 'PLATINUM' && contract.active</code> (terme Dev/BMad).</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 13 / AMBIENT AI</span>
+        <h3>Le mode zéro-clavier en refinement</h3>
+        <p>Un bot écoute la séance de backlog refinement de 30 minutes et met à jour en direct les 8 tickets Jira avec les réponses données par l'équipe.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 14 / EXÉCUTION NOCTURNE</span>
+        <h3>Le bac à sable de pré-Pull-Request</h3>
+        <p>Pour les tickets notés 95/100 en clarté, <code>bmad-agent-dev</code> génère la nuit une PR brouillon (Draft PR) que le dev inspecte le matin en prenant le ticket.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 15 / SANTÉ DU CODE</span>
+        <h3>Le radar de dette cachée</h3>
+        <p>Si un ticket PO demande de toucher à un module fragile, l'outil joint automatiquement le score de santé du code et suggère un ticket de refactoring préalable.</p>
+      </article>
+
+      <article class="crazy-cell searchable-item">
+        <span class="crazy-num">CASE 16 / MANIFESTE LOCAL</span>
+        <h3>La carte d'identité de brique (<code>brick.toml</code>)</h3>
+        <p>Chaque dossier réutilisable du repo contient un micro-manifeste maintenu par les agents BMad, servant de catalogue vivant zéro-effort pour Jira.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- SECTION 4 : JOB TO BE DONE (18 IDÉES) -->
+  <section id="sec-jtbd" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">04 / JOB TO BE DONE</span>
+        <h2>Alignement sur les motivations réelles par rôle (18 cas d'usage)</h2>
+      </div>
+      <span class="section-desc">Filtrez par acteur pour inspecter les irritants quotidiens et leur résolution dans Jira</span>
+    </div>
+
+    <div class="filter-bar">
+      <button class="filter-pill active" onclick="filterJTBD('ALL', this)">Tous les rôles (18)</button>
+      <button class="filter-pill" onclick="filterJTBD('PO', this)">Product Owner (6)</button>
+      <button class="filter-pill" onclick="filterJTBD('DEV', this)">Développeur (6)</button>
+      <button class="filter-pill" onclick="filterJTBD('PM', this)">Chef de Projet IA (4)</button>
+      <button class="filter-pill" onclick="filterJTBD('QA', this)">QA, Testeur et Architecte (2)</button>
+    </div>
+
+    <div class="jtbd-grid" id="jtbdContainer">
+      <!-- PO 1..6 -->
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #1</span>
+          <div class="jtbd-quote">"Ne pas passer pour un bloqueur sans y passer mes soirées"</div>
+        </div>
+        <div class="jtbd-solution">Mode 'Brouillon Express 3 Balles': le PO écrit 3 puces brutes et l'agent génère une proposition structurée que le PO valide en 2 minutes.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #2</span>
+          <div class="jtbd-quote">"Protéger ma vision métier sans dicter comment coder"</div>
+        </div>
+        <div class="jtbd-solution">Séparation stricte dans le template Jira entre le 'Contrat Métier Immuable' (propriété du PO) et la 'Piste d'Implémentation & Briques' (modifiable par le Dev).</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #3</span>
+          <div class="jtbd-quote">"Savoir si ma demande est simple ou un iceberg caché"</div>
+        </div>
+        <div class="jtbd-solution">Indicateur instantané de 'Complexité Cachée' dès la rédaction, signalant si la demande touche à 1 brique locale ou à 4 systèmes critiques.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #4</span>
+          <div class="jtbd-quote">"Ne plus chercher dans 40 pages Confluence"</div>
+        </div>
+        <div class="jtbd-solution">Panneau d'auto-citation qui propose au PO les 3 paragraphes de spécification existants à épingler en un clic dans le ticket.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #5</span>
+          <div class="jtbd-quote">"Éviter les oublis qui explosent en recette"</div>
+        </div>
+        <div class="jtbd-solution">Checklist dynamique adaptée au type de fonctionnalité (ex. paiement, export, formulaire) qui ne coche ses cases que si le texte du ticket y répond.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PO">
+        <div>
+          <span class="jtbd-role role-po">PRODUCT OWNER #6</span>
+          <div class="jtbd-quote">"Négocier le périmètre avec les parties prenantes"</div>
+        </div>
+        <div class="jtbd-solution">Suggestion automatique d'une variante 'MVP 100 % Briques Existantes' livrable deux fois plus vite si le métier accepte d'adapter légèrement son besoin.</div>
+      </article>
+
+      <!-- DEV 1..6 -->
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #1</span>
+          <div class="jtbd-quote">"Ouvrir un ticket et commencer à coder en 5 minutes"</div>
+        </div>
+        <div class="jtbd-solution">Kit de démarrage intégré au ticket: liens profonds vers les lignes de code exactes, variables d'environnement requises et commande de lancement local.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #2</span>
+          <div class="jtbd-quote">"Avoir confiance dans une brique codée par quelqu'un d'autre"</div>
+        </div>
+        <div class="jtbd-solution">Fiche de confiance de chaque brique suggérée affichant sa couverture de tests, sa date de dernière modification et les 3 derniers tickets qui l'ont utilisée avec succès.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #3</span>
+          <div class="jtbd-quote">"Ne pas perdre 2 heures à attendre une réponse du PO sur Slack"</div>
+        </div>
+        <div class="jtbd-solution">Anticipation des questions: l'agent pose les questions d'implémentation au PO avant que le ticket n'arrive dans la colonne du développeur.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #4</span>
+          <div class="jtbd-quote">"Déléguer la plomberie répétitive à bmad-agent-dev"</div>
+        </div>
+        <div class="jtbd-solution">Découpage explicite dans le ticket entre la 'Sous-tâche Agent BMad' (scaffolding, câblage de brique, tests unitaires) et la 'Sous-tâche Expertise Humaine'.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #5</span>
+          <div class="jtbd-quote">"Comprendre le pourquoi historique d'une règle bizarre"</div>
+        </div>
+        <div class="jtbd-solution">Inclusion automatique du lien vers l'ADR ou le commit original expliquant pourquoi la brique existante fonctionne ainsi.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="DEV">
+        <div>
+          <span class="jtbd-role role-dev">DÉVELOPPEUR #6</span>
+          <div class="jtbd-quote">"Ne pas être pollué par du blabla généré par IA"</div>
+        </div>
+        <div class="jtbd-solution">Format ultra-dense pour la section développeur: tables de décision, signatures de fonctions, schémas Mermaid sur fond transparent et zéro prose de remplissage.</div>
+      </article>
+
+      <!-- CHEF DE PROJET IA 1..4 -->
+      <article class="jtbd-card searchable-item" data-role="PM">
+        <div>
+          <span class="jtbd-role role-pm">CHEF DE PROJET IA #1</span>
+          <div class="jtbd-quote">"Démontrer un gain mesurable sans braquer les équipes"</div>
+        </div>
+        <div class="jtbd-solution">Déploiement progressif non-bloquant: l'agent commence en mode 'Suggestion en commentaire' avant de devenir un portail de validation.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PM">
+        <div>
+          <span class="jtbd-role role-pm">CHEF DE PROJET IA #2</span>
+          <div class="jtbd-quote">"Capitaliser sur le patrimoine logiciel de l'entreprise"</div>
+        </div>
+        <div class="jtbd-solution">Tableau de bord du 'Taux de levier du code' montrant combien de stories ont réutilisé des briques existantes grâce aux recommandations dans Jira.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PM">
+        <div>
+          <span class="jtbd-role role-pm">CHEF DE PROJET IA #3</span>
+          <div class="jtbd-quote">"Industrialiser le passage à bmad-agent-dev sans chaos"</div>
+        </div>
+        <div class="jtbd-solution">Standardisation du format de sortie des tickets Jira sur le schéma exact attendu par les workflows BMad (<code>bmad-build</code>, <code>bmad-agent-dev</code>).</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="PM">
+        <div>
+          <span class="jtbd-role role-pm">CHEF DE PROJET IA #4</span>
+          <div class="jtbd-quote">"Éviter la dérive entre Jira et le code réel"</div>
+        </div>
+        <div class="jtbd-solution">Synchronisation bidirectionnelle: quand <code>bmad-agent-dev</code> termine une story, il met à jour le ticket Jira avec les briques réellement utilisées et les écarts éventuels.</div>
+      </article>
+
+      <!-- QA & ARCHITECTE -->
+      <article class="jtbd-card searchable-item" data-role="QA">
+        <div>
+          <span class="jtbd-role role-qa">QA / TESTEUR</span>
+          <div class="jtbd-quote">"Ne pas découvrir les cas tordus le dernier jour du sprint"</div>
+        </div>
+        <div class="jtbd-solution">Génération dès l'étape PO de la matrice de test d'acceptation directement importable par <code>bmad-qa-generate-e2e-tests</code>.</div>
+      </article>
+
+      <article class="jtbd-card searchable-item" data-role="QA">
+        <div>
+          <span class="jtbd-role role-qa">ARCHITECTE</span>
+          <div class="jtbd-quote">"Faire respecter les standards sans assister à chaque grooming"</div>
+        </div>
+        <div class="jtbd-solution">Injection automatique des règles d'architecture (<code>AGENTS.md</code>) pertinentes dans chaque ticket touchant un domaine sensible.</div>
+      </article>
+    </div>
+  </section>
+
+  <!-- SECTION 5 : BACKCASTING (16 JALONS ET GARDE-FOUS) -->
+  <section id="sec-backcast" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">05 / BACKCASTING</span>
+        <h2>Rétro-planification industrielle de T+18 mois jusqu'au Jour 1 (16 jalons)</h2>
+      </div>
+      <span class="section-desc">Trajectoire inversée depuis l'état cible jusqu'à l'action immédiate et aux verrous d'adhésion</span>
+    </div>
+
+    <div class="filter-bar">
+      <button class="filter-pill active" onclick="filterBackcast('ALL', this)">Trajectoire complète (16)</button>
+      <button class="filter-pill" onclick="filterBackcast('MILESTONE', this)">Jalons temporels (12)</button>
+      <button class="filter-pill" onclick="filterBackcast('GUARD', this)">Garde-fous, leviers et verrous (4)</button>
+    </div>
+
+    <div class="timeline-container" id="backcastContainer">
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+18 MOIS / CIBLE ATTEINTE</span>
+        <h3>Exécution industrielle par bmad-agent-dev et réutilisation systémique</h3>
+        <p>80 % des tickets prêts pour le sprint sont directement exécutables par <code>bmad-agent-dev</code>, avec 70 % de réutilisation de briques internes et zéro aller-retour de clarification.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+15 MOIS</span>
+        <h3>Boucle autonome Draft-PR</h3>
+        <p>Les tickets atteignant le score de complétude 90/100 déclenchent automatiquement une session <code>bmad-build-auto</code> qui prépare la branche et les tests avant le sprint.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+12 MOIS</span>
+        <h3>Gouvernance par les contrats de briques</h3>
+        <p>Le catalogue de briques est auto-alimenté à chaque fusion de PR via un hook CI qui met à jour l'index vectoriel et structurel du patrimoine.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+9 MOIS</span>
+        <h3>Adoption généralisée du binôme Dev + Amelia</h3>
+        <p>Chaque développeur pilote <code>bmad-agent-dev</code> dans son IDE en lui passant directement l'URL ou l'ID du ticket Jira enrichi via MCP.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+6 MOIS</span>
+        <h3>Le co-pilote PO intégré dans Jira</h3>
+        <p>Les PO utilisent quotidiennement l'assistant de complétion qui croise leur brouillon avec Confluence et le catalogue de briques pour proposer des variantes de périmètre.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+4 MOIS</span>
+        <h3>Pont automatisé Confluence + Repo vers Jira</h3>
+        <p>Mise en service du pipeline RAG hybride (code source + documentation + historique Jira) capable d'attacher les bonnes sources et briques en moins de 15 secondes.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+3 MOIS</span>
+        <h3>Le 'Dry-Run Amelia' en backlog refinement</h3>
+        <p>Intégration d'un agent critique basé sur le profil <code>bmad-agent-dev</code> qui audite les tickets candidats au sprint et liste ses questions bloquantes.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+2 MOIS</span>
+        <h3>Indexation initiale des 50 briques cœur</h3>
+        <p>Cartographie automatisée des dépôts principaux pour extraire les 50 composants, services et utilitaires les plus réutilisables sous forme de fiches standardisées.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+6 SEMAINES</span>
+        <h3>Définition du standard 'Ticket BMad-Ready'</h3>
+        <p>Co-construction avec 2 PO et 2 Devs champions de la structure cible d'un ticket à double lecture (Intention Métier PO + Contexte d'Exécution Dev/Agent).</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+4 SEMAINES</span>
+        <h3>Prototype CLI / Webhook sur une squad pilote</h3>
+        <p>Branchement d'un premier script via MCP Jira (<code>jira-integration</code>) qui lit un ticket brouillon, interroge le repo local et poste un commentaire d'enrichissement.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">HORIZON T+2 SEMAINES</span>
+        <h3>Initialisation de <code>AGENTS.md</code> via <code>bmad-project-context</code></h3>
+        <p>Formalisation des conventions du dépôt, de l'architecture et des règles de réutilisation pour que les agents partagent le même référentiel.</p>
+      </div>
+
+      <div class="timeline-node searchable-item" data-btype="MILESTONE">
+        <span class="horizon-badge">SEMAINE 1 / ACTION JOUR 1</span>
+        <h3>Audit des 20 derniers tickets Jira</h3>
+        <p>Extraction des 20 derniers tickets de la squad pilote (10 réussis, 10 ayant subi des blocages) pour mesurer exactement ce qui manquait et tester une réécriture manuelle assistée par IA.</p>
+      </div>
+
+      <!-- 4 Garde-fous / leviers / verrous -->
+      <div class="timeline-node guardrail searchable-item" data-btype="GUARD">
+        <span class="horizon-badge">GARDE-FOU J+15</span>
+        <h3>Métrique de référence (Baseline)</h3>
+        <p>Mesure initiale du temps moyen de refinement, du nombre de commentaires de clarification par ticket et du taux de réutilisation perçu avant déploiement.</p>
+      </div>
+
+      <div class="timeline-node guardrail searchable-item" data-btype="GUARD">
+        <span class="horizon-badge">LEVIER D'ADHÉSION M+1</span>
+        <h3>Quick-win 'Zéro saisie de doc'</h3>
+        <p>Offrir aux PO une fonctionnalité immédiate qui retrouve et résume pour eux les liens Confluence sans leur imposer de formulaire supplémentaire.</p>
+      </div>
+
+      <div class="timeline-node guardrail searchable-item" data-btype="GUARD">
+        <span class="horizon-badge">LEVIER D'ADHÉSION M+2</span>
+        <h3>Quick-win 'Localisateur de code' pour les Devs</h3>
+        <p>Montrer aux développeurs que chaque ticket enrichi pointe déjà vers les 3 bons fichiers du repo et la brique existante à importer.</p>
+      </div>
+
+      <div class="timeline-node guardrail searchable-item" data-btype="GUARD">
+        <span class="horizon-badge">VERROU ARCHITECTURAL M+3</span>
+        <h3>Unification du format Story</h3>
+        <p>Alignement du gabarit de sortie de l'optimiseur Jira sur le format natif des stories BMad pour éviter toute double traduction ultérieure.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6 : EMERGENT THINKING (16 MOTIFS) -->
+  <section id="sec-emergent" class="block">
+    <div class="section-header">
+      <div class="section-title-group">
+        <span class="section-index">06 / EMERGENT THINKING</span>
+        <h2>Constellation des 16 motifs systémiques émergents</h2>
+      </div>
+      <span class="section-desc">Propriétés de second ordre nées du couplage entre PO, patrimoine de briques et bmad-agent-dev</span>
+    </div>
+
+    <!-- Constellation SVG à fond transparent -->
+    <div class="svg-diagram-box">
+      <svg viewBox="0 0 1000 130" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" style="background: transparent;">
+        <line x1="120" y1="65" x2="360" y2="40" stroke="#a855f7" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="360" y1="40" x2="620" y2="85" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="620" y1="85" x2="880" y2="50" stroke="#10b981" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="120" y1="65" x2="620" y2="85" stroke="#f59e0b" stroke-width="1" opacity="0.5"/>
+
+        <circle cx="120" cy="65" r="18" fill="#161f30" stroke="#f59e0b" stroke-width="2"/>
+        <text x="120" y="103" text-anchor="middle" fill="#f59e0b" font-family="monospace" font-size="11">MUTATION DU TICKET (M1, M5, M16)</text>
+
+        <circle cx="360" cy="40" r="18" fill="#161f30" stroke="#a855f7" stroke-width="2"/>
+        <text x="360" y="78" text-anchor="middle" fill="#a855f7" font-family="monospace" font-size="11">PATRIMOINE AUTO-CICATRISANT (M2, M6, M7, M9)</text>
+
+        <circle cx="620" cy="85" r="18" fill="#161f30" stroke="#38bdf8" stroke-width="2"/>
+        <text x="620" y="120" text-anchor="middle" fill="#38bdf8" font-family="monospace" font-size="11">CO-ÉVOLUTION PO & AMELIA (M3, M4, M11, M12, M14)</text>
+
+        <circle cx="880" cy="50" r="18" fill="#161f30" stroke="#10b981" stroke-width="2"/>
+        <text x="880" y="88" text-anchor="middle" fill="#10b981" font-family="monospace" font-size="11">CONTINUUM BMAD (M8, M10, M13, M15)</text>
+      </svg>
+    </div>
+
+    <div class="emergent-grid">
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 01</span>
+        <h3>La fin du ticket 'Post-it'</h3>
+        <p>Le ticket Jira cesse d'être un pense-bête administratif pour devenir un 'Contrat d'Assemblage Exécutable' reliant intention métier, patrimoine existant et agent de code.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 02</span>
+        <h3>L'inversion de la charge documentaire</h3>
+        <p>Ce n'est plus à l'humain de chercher la documentation pour l'attacher au ticket, c'est le ticket qui attire magnétiquement son propre contexte depuis le code et Confluence.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 03</span>
+        <h3>La brique comme unité de négociation produit</h3>
+        <p>La réutilisation technique remonte en amont: le PO conçoit désormais ses fonctionnalités en assemblant des briques connues plutôt qu'en partant d'une feuille blanche.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 04</span>
+        <h3>Le 'Persona Amelia' comme juge de paix bienveillant</h3>
+        <p>Utiliser <code>bmad-agent-dev</code> en amont comme lecteur-testeur du ticket dépersonnalise les critiques entre Devs et PO ('Amelia ne comprend pas la règle X' remplace 'Ton ticket est flou').</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 05</span>
+        <h3>Le Ticket Bifrons (Double Visage)</h3>
+        <p>Un même objet Jira doit offrir deux projections synchronisées: une narration métier épurée pour les humains et un graphe de contexte structuré pour l'agent BMad.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 06</span>
+        <h3>La documentation vivante par soustraction</h3>
+        <p>Si l'optimiseur de tickets détecte systématiquement des écarts entre Confluence et le dépôt Git, le ticket devient le déclencheur naturel de la mise à jour documentaire.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 07</span>
+        <h3>L'index de briques auto-cicatrisant</h3>
+        <p>Un catalogue de composants maintenu à la main meurt en 3 mois; il doit émerger automatiquement de l'analyse des Pull Requests et des fichiers <code>AGENTS.md</code>.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 08</span>
+        <h3>La granularité '1 Ticket = 1 Session BMad'</h3>
+        <p>Pour qu'un dev puisse déléguer à <code>bmad-agent-dev</code>, l'optimiseur de tickets doit agir comme un répartiteur de charge qui calibre chaque ticket à la taille exacte d'une fenêtre de contexte fiable.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 09</span>
+        <h3>La mémoire épisodique des erreurs d'équipe</h3>
+        <p>Chaque bug résolu ou incompréhension passée devient un anticorps injecté automatiquement dans les futurs tickets touchant le même domaine fonctionnel.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 10</span>
+        <h3>Le continuum BMad de bout en bout</h3>
+        <p>Le flux naturel relie <code>bmad-prd</code> / PO vers Optimiseur Jira vers <code>bmad-project-context</code> vers <code>bmad-agent-dev</code> (Amelia) vers <code>bmad-code-review</code> sans rupture de contexte.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 11</span>
+        <h3>L'économie de l'attention en grooming</h3>
+        <p>Les réunions de refinement ne servent plus à lire des tickets incomplets ni à chercher dans le code, mais uniquement à trancher les arbitrages d'architecture et de valeur pré-identifiés par l'agent.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 12</span>
+        <h3>Le score de réutilisabilité comme KPI produit</h3>
+        <p>Un ticket qui crée 100 % de code neuf alors que des briques existent est signalé comme une anomalie d'investissement, transformant la frugalité technique en réflexe produit.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 13</span>
+        <h3>Le prompt BMad embarqué</h3>
+        <p>Le ticket Jira devient littéralement le fichier d'entrée (ou le serveur MCP source) que le développeur branche dans sa session <code>bmad-agent-dev</code> en un seul appel.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 14</span>
+        <h3>La co-évolution PO-Agent</h3>
+        <p>À force de répondre aux 3 questions de complétion de l'assistant, les PO intériorisent la structure attendue et rédigent naturellement des tickets de meilleure qualité dès le premier jet.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 15</span>
+        <h3>L'architecture hexagonale de l'outil lui-même</h3>
+        <p>L'optimiseur de tickets doit être conçu comme un orchestrateur modulaire (connecteur Jira + moteur RAG Doc/Briques + simulateur <code>bmad-agent-dev</code>) pour évoluer sans refonte.</p>
+      </article>
+
+      <article class="motif-card searchable-item">
+        <span class="motif-id">MOTIF ÉMERGENT 16</span>
+        <h3>Du 'Ticket Complété' au 'Ticket Pré-Résolu'</h3>
+        <p>L'aboutissement logique de la démarche n'est pas seulement un beau texte dans Jira, mais un espace de travail préparé où les briques sont déjà importées et les tests d'acceptation déjà écrits.</p>
+      </article>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Artefact d'ingénierie autonome généré à partir du journal de session (.memlog.md) | 112 entrées et 4 axes de synthèse | Zéro dépendance externe
+</footer>
+
+<script>
+  // Bascule du simulateur Ticket Bifrons
+  function switchBifrons(mode, btn) {
+    document.querySelectorAll('.bifrons-tabs .tab-btn').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    document.getElementById('bifrons-po').classList.remove('active');
+    document.getElementById('bifrons-dev').classList.remove('active');
+    document.getElementById('bifrons-' + mode).classList.add('active');
+  }
+
+  // Filtrage par pétale Lotus Blossom
+  function filterLotus(petal, cell) {
+    document.querySelectorAll('#lotusSelector .lotus-cell').forEach(function(c) {
+      c.classList.remove('active');
+    });
+    cell.classList.add('active');
+    document.querySelectorAll('#lotusContainer .lotus-group').forEach(function(group) {
+      if (petal === 'ALL' || group.getAttribute('data-petal') === petal) {
+        group.style.display = '';
+      } else {
+        group.style.display = 'none';
+      }
+    });
+  }
+
+  // Filtrage par rôle Job to Be Done
+  function filterJTBD(role, btn) {
+    var parent = btn.parentElement;
+    parent.querySelectorAll('.filter-pill').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    btn.classList.add('active');
+    document.querySelectorAll('#jtbdContainer .jtbd-card').forEach(function(card) {
+      if (role === 'ALL' || card.getAttribute('data-role') === role) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  // Filtrage Backcasting
+  function filterBackcast(btype, btn) {
+    var parent = btn.parentElement;
+    parent.querySelectorAll('.filter-pill').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    btn.classList.add('active');
+    document.querySelectorAll('#backcastContainer .timeline-node').forEach(function(node) {
+      if (btype === 'ALL' || node.getAttribute('data-btype') === btype) {
+        node.style.display = '';
+      } else {
+        node.style.display = 'none';
+      }
+    });
+  }
+
+  // Recherche globale temps réel sur les 116 entrées
+  var searchInput = document.getElementById('globalSearch');
+  var searchCount = document.getElementById('searchCount');
+  var allItems = document.querySelectorAll('.searchable-item');
+
+  searchInput.addEventListener('input', function() {
+    var query = searchInput.value.trim().toLowerCase();
+    var visible = 0;
+    allItems.forEach(function(item) {
+      var text = item.textContent.toLowerCase();
+      if (!query || text.indexOf(query) !== -1) {
+        item.classList.remove('hidden-by-filter');
+        visible++;
+      } else {
+        item.classList.add('hidden-by-filter');
+      }
+    });
+    searchCount.textContent = visible + ' / ' + allItems.length + ' visibles';
+  });
+</script>
+
+</body>
+</html>
